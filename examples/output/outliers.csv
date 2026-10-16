@@ -1,0 +1,4 @@
+record,column,value,expected_range
+7abc3e49-a5fb-45f8-9431-80ec0de37ba4,cattle_owned,310,0 to 19
+4ff57877-ae11-44e4-859f-e4478eaeee0d,cattle_sold_12m,10,0 to 8
+7a579db5-8d07-4e4a-b385-107186b07693,monthly_income_kes,"2,500,000","3,800 to 60,300"

@@ -1,0 +1,24 @@
+# Consistency rules. Each "check" is a pandas expression that should be TRUE
+# for a valid record. Records where it is FALSE are listed in the report.
+# Use the cleaned (short) column names.
+
+rules:
+  - name: head_age_plausible
+    check: "hh_head_age >= 15 and hh_head_age <= 110"
+    message: "Household head age should be between 15 and 110"
+
+  - name: household_not_empty
+    check: "hh_size >= 1"
+    message: "Household must have at least one member"
+
+  - name: sold_not_more_than_owned
+    check: "cattle_sold_12m <= cattle_owned"
+    message: "Cattle sold in 12 months is more than cattle owned"
+
+  - name: milk_needs_cattle
+    check: "not (milk_litres_day > 0 and cattle_owned == 0)"
+    message: "Milk reported but no cattle owned"
+
+  - name: interview_length
+    check: "(end - start).dt.total_seconds() >= 600"
+    message: "Interview shorter than 10 minutes"
