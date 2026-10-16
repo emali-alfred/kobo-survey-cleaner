@@ -1,0 +1,7 @@
+record,rule,detail
+412a5108-9a6a-47b8-8fa3-91a959a297db,head_age_plausible,Household head age should be between 15 and 110
+79721b4d-671d-4986-9894-822f7c08c9be,household_not_empty,Household must have at least one member
+4ff57877-ae11-44e4-859f-e4478eaeee0d,sold_not_more_than_owned,Cattle sold in 12 months is more than cattle owned
+0169a835-fd4d-4157-bd47-9c5549a63b0f,sold_not_more_than_owned,Cattle sold in 12 months is more than cattle owned
+7b913861-45ed-451b-a66b-d94c871ba8a2,milk_needs_cattle,Milk reported but no cattle owned
+3f907663-9f40-4cef-8095-098fbd33fb8f,milk_needs_cattle,Milk reported but no cattle owned
