@@ -8,3 +8,9 @@ dist/
 .ipynb_checkpoints/
 output/
 !examples/output/
+web/_site/
+.claude/
+# Android signing keys must never be committed
+*.keystore
+*.jks
+signing-key-info.txt
