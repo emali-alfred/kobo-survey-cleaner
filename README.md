@@ -98,6 +98,23 @@ The `--form` and `--rules` options are optional. Without the form, the
 cleaner still removes duplicates, tidies names, recodes missing codes and
 flags outliers.
 
+## Windows app
+
+Download **`SurveyCleaner-Setup-<version>.exe`** from the
+[Releases page](https://github.com/emali-alfred/kobo-survey-cleaner/releases),
+run it, and open *Survey Cleaner* from the Start menu. No Python needed and no
+administrator rights; it uninstalls from *Settings → Apps*.
+
+Windows may show "Windows protected your PC" because the installer is new and
+not code-signed: click **More info → Run anyway**.
+
+To build the installer yourself (needs Python and
+[Inno Setup 6](https://jrsoftware.org/isinfo.php)):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File windows\build.ps1
+```
+
 ## Web and Android app
 
 No installation needed: the same cleaner runs in the browser at
@@ -163,6 +180,7 @@ surveyclean/
 ├── cli.py        # command line interface
 ├── gui.py        # desktop window (surveyclean-gui)
 └── demo/         # synthetic demo files used by --demo and the window
+windows/          # Windows installer build (PyInstaller + Inno Setup)
 web/              # browser / Android app (runs the package with Pyodide)
 android/          # Google Play publishing guide and store listing
 assets/           # logo, Play Store icon and feature graphic
