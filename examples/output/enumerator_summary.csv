@@ -1,0 +1,6 @@
+﻿enumerator,records,missing_pct,median_minutes,under_10_min,duplicates,outliers,rule_violations,flags_per_10_records
+enum_03,23,0.7,42.0,0,2,2,4,2.6
+enum_04,21,0.8,43.0,3,0,0,3,1.4
+enum_05,30,0.6,46.5,0,0,1,2,1.0
+enum_01,26,0.0,48.5,0,2,0,0,0.0
+enum_02,20,0.4,51.0,0,0,0,0,0.0
