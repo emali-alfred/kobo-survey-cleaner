@@ -3,7 +3,7 @@
 **Turn a raw survey export into analysis-ready data, plus a data quality report you can share with your team, in one command.**
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-11%20passing-2ea44f)
+![Tests](https://img.shields.io/badge/tests-21%20passing-2ea44f)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 Field teams collecting data on KoboToolbox or ODK spend days on the same cleaning
@@ -19,15 +19,17 @@ multi-select answers, and finding the records that don't make sense.
 | Step | What happens |
 | --- | --- |
 | **Remove system columns** | Drops Kobo metadata (`__version__`, `_validation_status`, `formhub/uuid`, ...) |
-| **Tidy column names** | `hh_info/livestock/cattle_owned` → `cattle_owned` |
+| **Tidy column names** | `hh_info/livestock/cattle_owned` → `cattle_owned`; Kobo's own split columns `livestock/kept/cattle` → `kept__cattle` |
 | **Remove duplicates** | Drops repeated submissions of the same form (same `_uuid`) |
-| **Recode missing codes** | `-99`, `-88`, `"dk"`, `"refused"` → real missing values |
-| **Fix data types** | Numbers and dates are converted using the XLSForm, and unreadable entries (e.g. `"twelve"`) are counted |
+| **Recode missing codes** | `-99`, `-99.0`, `-88`, `"dk"`, `"refused"` → real missing values |
+| **Fix data types** | Numbers and dates are converted using the XLSForm (times stay in local time), and unreadable entries (e.g. `"twelve"`) are counted |
+| **Interview length** | `duration_min` is added from the form's `start` and `end` |
 | **Split multi-select answers** | `"cattle goats"` → `livestock_kept__cattle = 1`, `livestock_kept__goats = 1` |
 | **Add labels** | `county = 2` → `county_label = Narok` |
 | **Flag outliers** | Extreme values are **flagged for checking, never deleted** |
 | **Run logic checks** | Your own rules, e.g. *cattle sold ≤ cattle owned* |
-| **Write a report** | A plain-language Markdown report and CSVs of every flagged record |
+| **Enumerator summary** | Records, median interview length, rushed interviews, missing rate and flags per enumerator |
+| **Write a report** | HTML and Markdown reports, an Excel workbook (one sheet per table) and CSVs of every flagged record |
 
 ## Example result
 
@@ -40,7 +42,7 @@ $ surveyclean examples/sample_raw_export.csv --form examples/sample_form.xlsx \
       --rules examples/rules.yaml --out examples/output
 
 Records: 124 in, 120 out (4 duplicates removed)
-Flags: 3 possible outliers, 6 rule violations
+Flags: 3 possible outliers, 9 rule violations
 ```
 
 It catches every problem that was planted:
@@ -55,6 +57,7 @@ It catches every problem that was planted:
 | More cattle sold than owned (2 records) | Rule `sold_not_more_than_owned` |
 | Milk produced with no cattle (2 records) | Rule `milk_needs_cattle` |
 | A 310-head herd and KES 2.5 million monthly income | Outlier flags |
+| One enumerator with 3 interviews under 10 minutes | Rule `interview_length` + enumerator summary |
 
 See the full report: [`examples/output/data_quality_report.md`](examples/output/data_quality_report.md)
 
@@ -65,18 +68,29 @@ git clone https://github.com/emali-alfred/kobo-survey-cleaner.git
 cd kobo-survey-cleaner
 pip install .
 
-surveyclean your_export.csv --form your_xlsform.xlsx --rules rules.yaml --out output
+surveyclean your_export.csv --form your_xlsform.xlsx --rules rules.yaml --out output --open
+surveyclean --demo --open     # try it on the built-in synthetic survey
 ```
+
+Prefer not to use the command line? Run **`surveyclean-gui`** for a small
+desktop window: pick your files, click *Clean data*, then *Open report*.
+It has a *Load demo survey* button too.
 
 Output folder:
 
 ```text
 output/
 ├── clean_data.csv            # analysis-ready data
-├── data_quality_report.md    # summary for the team / client
+├── clean_data.xlsx           # the same, plus a sheet per table below
+├── data_quality_report.html  # summary for the team / client (open in a browser)
+├── data_quality_report.md    # the same report as Markdown
 ├── rule_violations.csv       # records to call back
-└── outliers.csv              # values to confirm
+├── outliers.csv              # values to confirm
+└── enumerator_summary.csv    # only when an enumerator column is found
 ```
+
+The enumerator column is detected automatically (`enumerator`, `username`,
+`_submitted_by`, `deviceid`, ...) or set with `--enumerator-col`.
 
 The `--form` and `--rules` options are optional. Without the form, the
 cleaner still removes duplicates, tidies names, recodes missing codes and
@@ -121,7 +135,7 @@ pip install ".[dev]"
 python examples/make_sample_data.py      # regenerate the synthetic survey
 surveyclean examples/sample_raw_export.csv --form examples/sample_form.xlsx \
     --rules examples/rules.yaml --out examples/output
-pytest                                   # 11 tests
+pytest                                   # 21 tests
 ```
 
 ## Project structure
@@ -131,8 +145,10 @@ surveyclean/
 ├── xlsform.py    # reads the XLSForm (questions, types, choice labels)
 ├── clean.py      # individual cleaning and checking steps
 ├── pipeline.py   # runs the steps in order
-├── report.py     # writes the clean data and the report
-└── cli.py        # command line interface
+├── report.py     # writes the clean data, HTML/Markdown report and Excel workbook
+├── cli.py        # command line interface
+├── gui.py        # desktop window (surveyclean-gui)
+└── demo/         # synthetic demo files used by --demo and the window
 examples/         # synthetic demo survey, form, rules and output
 tests/            # pytest suite
 ```
@@ -141,8 +157,9 @@ tests/            # pytest suite
 
 - [ ] Repeat groups (household member rosters) exported as separate sheets
 - [ ] Stata `.dta` and SPSS `.sav` export with variable and value labels
-- [ ] Enumerator-level quality summary (speed, missing rate, flags per enumerator)
-- [ ] HTML report with charts
+- [x] Enumerator-level quality summary (speed, missing rate, flags per enumerator)
+- [x] HTML report
+- [ ] Charts in the HTML report
 
 ---
 
