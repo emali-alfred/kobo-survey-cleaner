@@ -54,15 +54,16 @@ def star(draw: ImageDraw.ImageDraw, cx: float, cy: float, r: float, fill) -> Non
     draw.polygon(pts, fill=fill)
 
 
-def draw_mark(size: int, rounded: bool) -> Image.Image:
-    """The icon at `size` px. Geometry is designed on a 1024 grid."""
+def draw_mark(size: int, rounded: bool, background: bool = True) -> Image.Image:
+    """The icon at `size` px. Geometry is designed on a 1024 grid.
+    background=False draws only the clipboard and sparkles (transparent around them)."""
     S = size * SS
     u = S / 1024  # one design unit
 
     def b(*v):  # scale a box / point
         return [x * u for x in v]
 
-    img = gradient(S).convert("RGBA")
+    img = gradient(S).convert("RGBA") if background else Image.new("RGBA", (S, S), (0, 0, 0, 0))
 
     # soft shadow under the clipboard
     shadow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
@@ -136,7 +137,18 @@ def main() -> None:
     big.save(PKG / "icon.ico", sizes=[(s, s) for s in ico_sizes])
     draw_mark(256, rounded=True).save(PKG / "icon.png", optimize=True)
     feature_graphic().save(HERE / "feature-graphic-1024x500.png", optimize=True)
-    print("Logo files written to", HERE, "and", PKG)
+
+    # Web app / Android icons
+    web = HERE.parent / "web" / "icons"
+    web.mkdir(parents=True, exist_ok=True)
+    draw_mark(192, rounded=True).save(web / "icon-192.png", optimize=True)
+    draw_mark(512, rounded=True).save(web / "icon-512.png", optimize=True)
+    # Maskable: Android crops icons to circles/squircles, so keep the mark in the
+    # central safe zone (80%) on a full-bleed background.
+    maskable = gradient(512).convert("RGBA")
+    maskable.alpha_composite(draw_mark(410, rounded=False, background=False), (51, 51))
+    maskable.convert("RGB").save(web / "maskable-512.png", optimize=True)
+    print("Logo files written to", HERE, PKG, "and", web)
 
 
 if __name__ == "__main__":

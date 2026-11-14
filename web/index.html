@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Survey Cleaner</title>
+<meta name="description" content="Clean KoboToolbox and ODK survey exports and get a data quality report. Runs on your device: your data is never uploaded.">
+<meta name="theme-color" content="#0f7a68">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap brand">
+    <img src="icons/icon-192.png" alt="" width="44" height="44">
+    <div>
+      <h1>Survey Cleaner</h1>
+      <p>Clean KoboToolbox &amp; ODK exports and get a data quality report</p>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <p class="private">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 4.6-4.6 1.4 1.4-6 6Z"/></svg>
+    Runs entirely on your device. Your survey data is never uploaded.
+  </p>
+
+  <section class="card" aria-labelledby="files-h">
+    <div class="card-head">
+      <h2 id="files-h">1. Choose your files</h2>
+      <button type="button" class="link" id="demo">Try the demo survey</button>
+    </div>
+    <div class="drops">
+      <label class="drop" data-slot="data">
+        <input type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+        <span class="drop-title">Data export <em>required</em></span>
+        <span class="drop-file">CSV or Excel from Kobo / ODK</span>
+      </label>
+      <label class="drop" data-slot="form">
+        <input type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+        <span class="drop-title">XLSForm <em>optional</em></span>
+        <span class="drop-file">Adds types, labels, multi-select columns</span>
+      </label>
+      <label class="drop" data-slot="rules">
+        <input type="file">
+        <span class="drop-title">Rules <em>optional</em></span>
+        <span class="drop-file">YAML file of logic checks</span>
+      </label>
+    </div>
+
+    <details class="opts">
+      <summary>Options</summary>
+      <div class="grid">
+        <label>Report title<input id="title" type="text" value="Data quality report"></label>
+        <label>Enumerator column<input id="enum" type="text" placeholder="auto-detect"></label>
+        <label>Outlier strictness (IQR ×)<input id="k" type="number" min="1" max="10" step="0.5" value="3"></label>
+      </div>
+    </details>
+  </section>
+
+  <section class="card" aria-labelledby="run-h">
+    <h2 id="run-h">2. Clean</h2>
+    <button type="button" id="run" class="primary" disabled>Clean data</button>
+    <div class="status" id="status" role="status" aria-live="polite">
+      <div class="bar"><span id="bar"></span></div>
+      <span id="status-text">Preparing the cleaning engine…</span>
+    </div>
+    <p class="hint" id="first-time">The first start downloads about 30&nbsp;MB once; after that it works offline.</p>
+  </section>
+
+  <section class="card" id="results" hidden aria-labelledby="res-h">
+    <h2 id="res-h">3. Results</h2>
+    <div id="warnings"></div>
+    <div class="stats" id="stats"></div>
+    <h3>Downloads</h3>
+    <div class="downloads" id="downloads"></div>
+    <h3>Report</h3>
+    <iframe id="report" title="Data quality report" sandbox="allow-same-origin"></iframe>
+  </section>
+</main>
+
+<footer class="wrap foot">
+  <a href="https://github.com/emali-alfred/kobo-survey-cleaner">Source code</a> ·
+  <a href="privacy.html">Privacy</a> ·
+  <span id="version"></span>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
