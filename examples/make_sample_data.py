@@ -28,6 +28,7 @@ LIVESTOCK = {"cattle": "Cattle", "goats": "Goats", "sheep": "Sheep", "poultry": 
 INCOME = {"crops": "Crop farming", "livestock": "Livestock", "business": "Small business",
           "wage": "Wage labour", "remittances": "Remittances"}
 DECIDER = {"head": "Household head", "spouse": "Spouse", "joint": "Jointly", "other": "Other member"}
+ENUMERATORS = ["enum_01", "enum_02", "enum_03", "enum_04", "enum_05"]
 
 
 def submission_id() -> str:
@@ -91,6 +92,15 @@ def make_survey() -> pd.DataFrame:
     df.loc[66, "income/monthly_income_kes"] = 2_500_000          # extreme outlier
     df.loc[101, "livestock/cattle_owned"] = 310                  # large herd: real or typo?
 
+    # Enumerators (separate random stream so the other values stay the same).
+    enum_rng = np.random.default_rng(11)
+    df["enumerator"] = enum_rng.choice(ENUMERATORS, size=len(df))
+    rushed = [9, 52, 88]                                         # one enumerator rushing
+    df.loc[rushed, "enumerator"] = "enum_04"
+    df.loc[rushed, "end"] = [
+        (pd.Timestamp(s) + pd.Timedelta(minutes=m)).isoformat()
+        for s, m in zip(df.loc[rushed, "start"], [6, 7, 8])]
+
     dupes = df.loc[[3, 29, 29, 84]].copy()                       # enumerator re-submitted
     df = pd.concat([df, dupes], ignore_index=True)
     df["_index"] = range(1, len(df) + 1)
@@ -101,6 +111,7 @@ def make_form() -> dict[str, pd.DataFrame]:
     survey = pd.DataFrame([
         ("start", "start", ""),
         ("end", "end", ""),
+        ("text", "enumerator", "Enumerator ID"),
         ("begin group", "hh_info", "Household information"),
         ("select_one county", "county", "County"),
         ("select_one sex", "hh_head_sex", "Sex of household head"),
@@ -135,10 +146,18 @@ def make_form() -> dict[str, pd.DataFrame]:
 
 
 if __name__ == "__main__":
+    import shutil
+
     data = make_survey()
     data.to_csv(HERE / "sample_raw_export.csv", sep=";", index=False)  # Kobo's default separator
     with pd.ExcelWriter(HERE / "sample_form.xlsx") as xw:
         for name, sheet in make_form().items():
             sheet.to_excel(xw, sheet_name=name, index=False)
+    # Ship the same files inside the package for `surveyclean --demo` and the app.
+    demo = HERE.parent / "surveyclean" / "demo"
+    demo.mkdir(exist_ok=True)
+    for f in ["sample_raw_export.csv", "sample_form.xlsx", "rules.yaml"]:
+        shutil.copy(HERE / f, demo / f)
     print(f"Wrote {len(data)} synthetic records to {HERE / 'sample_raw_export.csv'}")
     print(f"Wrote form definition to {HERE / 'sample_form.xlsx'}")
+    print(f"Copied demo files to {demo}")

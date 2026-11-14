@@ -8,6 +8,7 @@ found is listed in the data quality report.
 from __future__ import annotations
 
 import re
+from datetime import timedelta, timezone
 
 import pandas as pd
 
@@ -48,11 +49,34 @@ def clean_column_names(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, str]]:
         name = re.sub(r"[^0-9a-zA-Z]+", "_", name).strip("_").lower()
         return name or "unnamed"
 
-    candidates = [snake(short(c)) for c in df.columns]
+    # Kobo also exports each multi-select option as its own column under the
+    # question's path ("livestock/kept" + "livestock/kept/cattle"). Name those
+    # "kept__cattle" so they don't turn into a bare, clashing "cattle".
+    originals = set(map(str, df.columns))
+    parent_of: dict[str, str] = {}
+    for c in df.columns:
+        c = str(c)
+        if "/" in c and not c.startswith("_"):
+            parent = c.rsplit("/", 1)[0]
+            if parent in originals:
+                parent_of[c] = parent
+
+    def candidate(c: str) -> str:
+        if c in parent_of:
+            return f"{snake(short(parent_of[c]))}__{snake(c.rsplit('/', 1)[1])}"
+        return snake(short(c))
+
+    def full(c: str) -> str:
+        if c in parent_of:
+            return f"{snake(parent_of[c])}__{snake(c.rsplit('/', 1)[1])}"
+        return snake(c)
+
+    cols = [str(c) for c in df.columns]
+    candidates = [candidate(c) for c in cols]
     counts = pd.Series(candidates).value_counts()
     mapping: dict[str, str] = {}
-    for original, cand in zip(df.columns, candidates):
-        mapping[original] = snake(original) if counts[cand] > 1 else cand
+    for original, cand in zip(cols, candidates):
+        mapping[original] = full(original) if counts[cand] > 1 else cand
     return df.rename(columns=mapping), {k: v for k, v in mapping.items() if k != v}
 
 
@@ -65,6 +89,14 @@ def remove_duplicates(df: pd.DataFrame, key: str = "_uuid") -> tuple[pd.DataFram
     return df.loc[~dupes_mask].reset_index(drop=True), df.loc[dupes_mask]
 
 
+def _is_number(x) -> bool:
+    try:
+        float(x)
+    except (TypeError, ValueError):
+        return False
+    return str(x).strip() != ""
+
+
 def recode_missing(df: pd.DataFrame, codes: list | None = None,
                    columns: list[str] | None = None) -> tuple[pd.DataFrame, dict[str, int]]:
     """Replace special missing codes (-99, "don't know", ...) with real missing values.
@@ -74,15 +106,42 @@ def recode_missing(df: pd.DataFrame, codes: list | None = None,
     out = df.copy()
     counts: dict[str, int] = {}
     code_strs = {str(c).strip().lower() for c in codes}
+    code_nums = {float(c) for c in codes if _is_number(c)}
     for col in cols:
         s = out[col]
         as_str = s.astype("string").str.strip().str.lower()
-        mask = as_str.isin(code_strs) & s.notna()
+        mask = as_str.isin(code_strs).fillna(False).astype(bool)
+        if code_nums:
+            # "-99.0" or -99.0 (common in Excel exports) is the same code as -99.
+            mask |= pd.to_numeric(as_str, errors="coerce").isin(code_nums).fillna(False).astype(bool)
+        mask &= s.notna()
         n = int(mask.sum())
         if n:
             out[col] = s.mask(mask)
             counts[col] = n
     return out, counts
+
+
+_OFFSET = re.compile(r"(Z|[+-]\d{2}:?\d{2})$")
+
+
+def parse_datetimes(s: pd.Series) -> pd.Series:
+    """Parse timestamps such as "2026-03-12T09:17:00.000+03:00".
+
+    Kobo stamps each time with the phone's UTC offset. Mixed offsets are parsed
+    as UTC and then shown in the most common offset, so times stay in local
+    time (09:17 in Nairobi rather than 06:17 UTC)."""
+    parsed = pd.to_datetime(s, errors="coerce", utc=True, format="mixed")
+    offsets = s.dropna().astype(str).str.strip().str.extract(_OFFSET)[0].dropna()
+    if offsets.empty:
+        return parsed.dt.tz_localize(None)
+    common = offsets.mode().iloc[0]
+    if common == "Z":
+        return parsed
+    sign = -1 if common[0] == "-" else 1
+    digits = common[1:].replace(":", "")
+    delta = timedelta(hours=int(digits[:2]), minutes=int(digits[2:]))
+    return parsed.dt.tz_convert(timezone(sign * delta))
 
 
 def coerce_types(df: pd.DataFrame, form: Form) -> tuple[pd.DataFrame, dict[str, int]]:
@@ -96,8 +155,10 @@ def coerce_types(df: pd.DataFrame, form: Form) -> tuple[pd.DataFrame, dict[str, 
         before = out[q.name].notna().sum()
         if q.qtype in {"integer", "decimal", "range"}:
             out[q.name] = pd.to_numeric(out[q.name], errors="coerce")
-        elif q.qtype in {"date", "datetime", "start", "end", "today"}:
-            out[q.name] = pd.to_datetime(out[q.name], errors="coerce", utc=q.qtype != "date")
+        elif q.qtype in {"date", "today"}:
+            out[q.name] = pd.to_datetime(out[q.name], errors="coerce", format="mixed")
+        elif q.qtype in {"datetime", "start", "end"}:
+            out[q.name] = parse_datetimes(out[q.name])
         else:
             continue
         lost = int(before - out[q.name].notna().sum())
@@ -121,10 +182,73 @@ def split_select_multiple(df: pd.DataFrame, form: Form) -> tuple[pd.DataFrame, l
         tokens = out[q.name].fillna("").astype(str).str.split()
         for opt in options:
             col = f"{q.name}__{opt}"
+            # Always rebuild from the answer text, even if Kobo exported its own
+            # 0/1 column: Kobo's version uses "1"/"0"/"True"/"False" inconsistently.
             out[col] = tokens.apply(lambda vals, o=opt: int(o in vals)).where(answered)
             out[col] = out[col].astype("Int64")
             created.append(col)
     return out, created
+
+
+def add_duration(df: pd.DataFrame, start: str = "start", end: str = "end",
+                 col: str = "duration_min") -> pd.DataFrame:
+    """Add interview length in minutes when the form recorded start and end times."""
+    if start not in df.columns or end not in df.columns:
+        return df
+    s, e = df[start], df[end]
+    if not (pd.api.types.is_datetime64_any_dtype(s) and pd.api.types.is_datetime64_any_dtype(e)):
+        return df
+    out = df.copy()
+    out[col] = ((e - s).dt.total_seconds() / 60).round(1)
+    return out
+
+
+ENUMERATOR_CANDIDATES = ["enumerator", "enumerator_name", "enumerator_id", "enum_name",
+                         "interviewer", "username", "_submitted_by", "deviceid"]
+
+
+def find_enumerator_column(df: pd.DataFrame, preferred: str | None = None) -> str | None:
+    """Return the column that identifies who collected each record, if any."""
+    if preferred:
+        return preferred if preferred in df.columns else None
+    for c in ENUMERATOR_CANDIDATES:
+        if c in df.columns and df[c].notna().any():
+            return c
+    return None
+
+
+def enumerator_summary(df: pd.DataFrame, enum_col: str, outliers: pd.DataFrame,
+                       violations: pd.DataFrame, duplicates: pd.DataFrame | None = None,
+                       id_col: str = "_uuid", short_minutes: float = 10.0) -> pd.DataFrame:
+    """One row per enumerator: workload, interview speed, missing answers and flags.
+    Use it to see who needs retraining or a call-back, not to rank people."""
+    questions = [c for c in df.columns if not c.startswith("_") and "__" not in c
+                 and not c.endswith("_label") and c not in {enum_col, "start", "end", "duration_min"}]
+    who = df[enum_col].astype("string").fillna("(blank)")
+    rec_to_enum = dict(zip(df[id_col], who)) if id_col in df.columns else dict(zip(df.index, who))
+
+    def flags_per(table: pd.DataFrame) -> pd.Series:
+        if table is None or table.empty:
+            return pd.Series(dtype="int64")
+        return table["record"].map(rec_to_enum).value_counts()
+
+    g = pd.DataFrame({"enumerator": who})
+    summary = g.groupby("enumerator").size().rename("records").to_frame()
+    if questions:
+        summary["missing_pct"] = (df[questions].isna().mean(axis=1).mul(100)
+                                  .groupby(who).mean().round(1))
+    if "duration_min" in df.columns:
+        dur = df["duration_min"]
+        summary["median_minutes"] = dur.groupby(who).median().round(1)
+        summary[f"under_{short_minutes:g}_min"] = (dur < short_minutes).groupby(who).sum().astype(int)
+    if duplicates is not None and not duplicates.empty and enum_col in duplicates.columns:
+        summary["duplicates"] = (duplicates[enum_col].astype("string").fillna("(blank)")
+                                 .value_counts().reindex(summary.index).fillna(0).astype(int))
+    summary["outliers"] = flags_per(outliers).reindex(summary.index).fillna(0).astype(int)
+    summary["rule_violations"] = flags_per(violations).reindex(summary.index).fillna(0).astype(int)
+    summary["flags_per_10_records"] = ((summary["outliers"] + summary["rule_violations"])
+                                       / summary["records"] * 10).round(1)
+    return summary.sort_values("flags_per_10_records", ascending=False).reset_index()
 
 
 def apply_labels(df: pd.DataFrame, form: Form, suffix: str = "_label") -> tuple[pd.DataFrame, list[str]]:
