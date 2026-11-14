@@ -1,0 +1,18 @@
+{
+  "name": "Survey Cleaner",
+  "short_name": "Survey Cleaner",
+  "description": "Clean KoboToolbox and ODK survey exports and get a data quality report. Runs on your device: your data is never uploaded.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f7a68",
+  "theme_color": "#0f7a68",
+  "categories": ["productivity", "utilities", "education"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

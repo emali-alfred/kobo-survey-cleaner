@@ -5,7 +5,7 @@
 **Turn a raw survey export into analysis-ready data, plus a data quality report you can share with your team, in one command.**
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-21%20passing-2ea44f)
+![Tests](https://img.shields.io/badge/tests-25%20passing-2ea44f)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 Field teams collecting data on KoboToolbox or ODK spend days on the same cleaning
@@ -98,6 +98,18 @@ The `--form` and `--rules` options are optional. Without the form, the
 cleaner still removes duplicates, tidies names, recodes missing codes and
 flags outliers.
 
+## Web and Android app
+
+No installation needed: the same cleaner runs in the browser at
+**https://emali-alfred.github.io/kobo-survey-cleaner/** (phones included).
+It runs entirely on the device with [Pyodide](https://pyodide.org), so survey
+data is never uploaded, and after the first visit it works offline. In Chrome
+on Android, choose *Install app* to add it to the home screen.
+
+The web app lives in [`web/`](web/) (`python web/build.py` assembles it), and
+[`android/PLAY_STORE.md`](android/PLAY_STORE.md) explains how it is packaged
+for Google Play.
+
 ## Writing logic checks
 
 Rules live in a simple YAML file. Each `check` describes what a **valid**
@@ -137,7 +149,7 @@ pip install ".[dev]"
 python examples/make_sample_data.py      # regenerate the synthetic survey
 surveyclean examples/sample_raw_export.csv --form examples/sample_form.xlsx \
     --rules examples/rules.yaml --out examples/output
-pytest                                   # 21 tests
+pytest                                   # 25 tests
 ```
 
 ## Project structure
@@ -151,6 +163,9 @@ surveyclean/
 ├── cli.py        # command line interface
 ├── gui.py        # desktop window (surveyclean-gui)
 └── demo/         # synthetic demo files used by --demo and the window
+web/              # browser / Android app (runs the package with Pyodide)
+android/          # Google Play publishing guide and store listing
+assets/           # logo, Play Store icon and feature graphic
 examples/         # synthetic demo survey, form, rules and output
 tests/            # pytest suite
 ```

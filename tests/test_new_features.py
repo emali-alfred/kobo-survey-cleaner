@@ -62,6 +62,19 @@ def test_missing_file_gives_clear_error(tmp_path):
         run(tmp_path / "nope.csv")
 
 
+@pytest.mark.parametrize("name,content,message", [
+    ("empty.csv", "", "empty"),
+    ("rules.yaml", "rules: []\n", "not a survey export"),
+    ("one_col.csv", "hello\nworld\n", "could not be read|does not look like"),
+    ("one_row.csv", "a,b\n", "does not look like"),
+])
+def test_wrong_data_file_gives_clear_error(tmp_path, name, content, message):
+    f = tmp_path / name
+    f.write_text(content, encoding="utf-8")
+    with pytest.raises(SurveyCleanError, match=message):
+        run(f)
+
+
 def test_bad_rules_file(tmp_path):
     data = tmp_path / "d.csv"
     data.write_text("a,_uuid\n1,x\n", encoding="utf-8")

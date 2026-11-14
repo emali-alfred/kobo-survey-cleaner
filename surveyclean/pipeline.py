@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import csv
+import io
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -42,17 +45,36 @@ def read_export(path: str | Path) -> pd.DataFrame:
     if not path.exists():
         raise SurveyCleanError(f"Data file not found: {path}")
     suffix = path.suffix.lower()
+    if suffix not in {".csv", ".txt", ".tsv", ".xlsx", ".xlsm", ".xls"}:
+        raise SurveyCleanError(f"{path.name} is not a survey export. Choose the .csv or .xlsx "
+                               "file downloaded from KoboToolbox or ODK.")
+    if path.stat().st_size == 0:
+        raise SurveyCleanError(f"{path.name} is empty.")
     try:
         if suffix in {".xlsx", ".xlsm", ".xls"}:
-            return pd.read_excel(path, dtype=str, sheet_name=0)
-        try:
-            return pd.read_csv(path, sep=None, engine="python", dtype=str, encoding="utf-8-sig")
-        except UnicodeDecodeError:  # files re-saved in Excel on Windows
-            return pd.read_csv(path, sep=None, engine="python", dtype=str, encoding="cp1252")
+            df = pd.read_excel(path, dtype=str, sheet_name=0)
+        else:
+            raw = path.read_bytes()
+            try:
+                text = raw.decode("utf-8-sig")
+            except UnicodeDecodeError:  # files re-saved in Excel on Windows
+                text = raw.decode("cp1252")
+            try:
+                sep = csv.Sniffer().sniff(text[:65536], delimiters=",;\t|").delimiter
+            except csv.Error:
+                sep = ","
+            df = pd.read_csv(io.StringIO(text), sep=sep, dtype=str)
     except ImportError as exc:
         raise SurveyCleanError(f"Cannot read {path.name}: {exc}. Save it as .xlsx or .csv.") from exc
     except pd.errors.EmptyDataError as exc:
         raise SurveyCleanError(f"{path.name} is empty.") from exc
+    except (csv.Error, pd.errors.ParserError, ValueError, zipfile.BadZipFile) as exc:
+        raise SurveyCleanError(f"{path.name} could not be read as a table. Is it the export "
+                               f"downloaded from KoboToolbox or ODK? ({exc})") from exc
+    if df.shape[1] < 2 or df.empty:
+        raise SurveyCleanError(f"{path.name} has {df.shape[1]} column(s) and {len(df)} row(s): "
+                               "that does not look like a survey export.")
+    return df
 
 
 def load_rules(path: str | Path | None) -> list[dict]:
