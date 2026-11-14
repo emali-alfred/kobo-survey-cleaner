@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/icon-1024.png" alt="Survey Cleaner logo" width="140"></p>
+
 # surveyclean: KoboToolbox / ODK survey data cleaner
 
 **Turn a raw survey export into analysis-ready data, plus a data quality report you can share with your team, in one command.**

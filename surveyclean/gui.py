@@ -4,6 +4,7 @@ Start it with `surveyclean-gui` (or `python -m surveyclean.gui`)."""
 
 from __future__ import annotations
 
+import sys
 import threading
 import tkinter as tk
 import traceback
@@ -172,8 +173,29 @@ class App(ttk.Frame):
             open_file(self.paths[key])
 
 
+def set_icon(root: tk.Tk) -> None:
+    """Show the Survey Cleaner logo in the title bar and taskbar."""
+    from importlib import resources
+    assets = Path(str(resources.files("surveyclean") / "assets"))
+    try:
+        if (assets / "icon.ico").exists() and sys.platform.startswith("win"):
+            root.iconbitmap(default=str(assets / "icon.ico"))
+        if (assets / "icon.png").exists():
+            root._icon = tk.PhotoImage(file=str(assets / "icon.png"))  # keep a reference
+            root.iconphoto(True, root._icon)
+    except tk.TclError:
+        pass  # an icon is nice to have, never a reason to fail
+
+
 def main() -> None:
+    if sys.platform.startswith("win"):
+        try:  # own taskbar button and icon instead of Python's
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("surveyclean.gui")
+        except (AttributeError, OSError):
+            pass
     root = tk.Tk()
+    set_icon(root)
     try:
         ttk.Style(root).theme_use("vista")
     except tk.TclError:
