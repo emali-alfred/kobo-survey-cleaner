@@ -1,11 +1,34 @@
 <p align="center"><img src="assets/icon-1024.png" alt="Survey Cleaner logo" width="140"></p>
 
-# surveyclean: KoboToolbox / ODK survey data cleaner
+<h1 align="center">Survey Cleaner</h1>
 
-**Turn a raw survey export, repeat groups included, into ONE analysis-ready file (Excel, CSV, R, Stata, SPSS or HTML) with answer labels and a data quality report.**
+<p align="center"><b>Turn a raw KoboToolbox / ODK export, repeat groups included, into ONE analysis-ready file<br>
+(Excel, CSV, R, Stata, SPSS or HTML) with answer labels and a data quality report.</b></p>
+
+<p align="center">
+  <a href="https://github.com/emali-alfred/kobo-survey-cleaner/releases/latest/download/SurveyCleaner-Setup.exe"><img src="assets/buttons/download-windows.svg" alt="Download for Windows" height="56"></a>
+  <a href="https://emali-alfred.github.io/kobo-survey-cleaner/"><img src="assets/buttons/open-web-app.svg" alt="Open the web app" height="56"></a>
+  <a href="https://github.com/emali-alfred/kobo-survey-cleaner/releases/latest/download/SurveyCleaner-Android.apk"><img src="assets/buttons/download-android.svg" alt="Download the Android app" height="56"></a>
+</p>
+
+<p align="center">Free and open source · your survey data never leaves your device · no GitHub account needed</p>
+
+### How to install (one click, no technical steps)
+
+- **Windows:** click **Download for Windows**, open the downloaded file, and follow the steps.
+  Windows may show a blue *"Windows protected your PC"* box because the app is new: click
+  **More info**, then **Run anyway**. Then open *Survey Cleaner* from the Start menu.
+- **Any device, nothing to install:** click **Open the web app**. On a phone, use your browser's
+  menu → *Add to Home screen* to keep it like an app.
+- **Android:** click **Android app**, open the downloaded file, and allow *Install unknown apps*
+  when your phone asks.
+
+Every version has a **Load demo survey** button so you can try it straight away.
+
+---
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-79%20passing-2ea44f)
+![Tests](https://img.shields.io/badge/tests-80%20passing-2ea44f)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 Field teams collecting data on KoboToolbox or ODK spend days on the same cleaning
@@ -72,14 +95,16 @@ are removed when you export.
 
 ## Windows app
 
-Download **`SurveyCleaner-Setup-<version>.exe`** from the
-[Releases page](https://github.com/emali-alfred/kobo-survey-cleaner/releases),
+[**Download the latest installer**](https://github.com/emali-alfred/kobo-survey-cleaner/releases/latest/download/SurveyCleaner-Setup.exe)
+(always the newest version; older versions are on the
+[Releases page](https://github.com/emali-alfred/kobo-survey-cleaner/releases)),
 run it, and open *Survey Cleaner* from the Start menu. No Python needed and no
 administrator rights; it uninstalls from *Settings → Apps*. It has a
 **Load demo survey** button to try everything straight away.
 
-Windows may show "Windows protected your PC" because the installer is new and
-not code-signed: click **More info → Run anyway**.
+Windows may show "Windows protected your PC" because the installer is not yet
+code-signed: click **More info → Run anyway**. The download page lists a
+SHA-256 checksum for each file if you want to confirm it is genuine.
 
 To build the installer yourself (needs Python and
 [Inno Setup 6](https://jrsoftware.org/isinfo.php)):
@@ -88,7 +113,11 @@ To build the installer yourself (needs Python and
 powershell -ExecutionPolicy Bypass -File windows\build.ps1
 ```
 
-The build checks the bundled program by exporting the demo in all seven formats.
+The build checks the bundled program by exporting the demo in all seven formats,
+and writes both `SurveyCleaner-Setup-<version>.exe` and `SurveyCleaner-Setup.exe`
+(attach both to a release so the download button always gets the newest one).
+With a code-signing certificate installed, set `SURVEYCLEAN_SIGN_THUMBPRINT` to its
+thumbprint and the build signs the program and the installer.
 
 ## Web and Android app
 
