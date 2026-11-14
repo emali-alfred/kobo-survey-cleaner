@@ -14,3 +14,8 @@ web/_site/
 *.keystore
 *.jks
 signing-key-info.txt
+
+# Never commit Android signing material or store packages
+*Google Play package*.zip
+*.aab
+*.apk

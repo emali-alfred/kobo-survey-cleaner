@@ -107,6 +107,40 @@ def make_survey() -> pd.DataFrame:
     return df
 
 
+MAIN_SHEET = "Livestock household survey"   # Kobo names the first sheet after the form
+MEMBER_SHEET = "hh_members"
+
+
+def make_members(main: pd.DataFrame) -> pd.DataFrame:
+    """The household-member roster, a repeat group, as Kobo exports it: one row
+    per member, linked to its household by _parent_index (the household's _index)."""
+    rng_m = np.random.default_rng(31)  # own stream: household answers stay the same
+    rows = []
+    roster_of: dict[str, list[dict]] = {}
+    for _, hh in main.iterrows():
+        uuid_ = hh["_uuid"]
+        if uuid_ not in roster_of:  # a re-submitted duplicate repeats the same roster
+            size = int(hh["hh_info/hh_size"]) if str(hh["hh_info/hh_size"]).isdigit() else 4
+            members = []
+            for m in range(max(size, 0)):
+                age = int(rng_m.integers(30, 80)) if m == 0 else int(rng_m.integers(0, 70))
+                members.append({
+                    "hh_members/member_sex": rng_m.choice(["1", "2"]),
+                    "hh_members/member_age": age,
+                    "hh_members/in_school": (rng_m.choice(["0", "1"], p=[.25, .75])
+                                             if 6 <= age <= 17 else "0"),
+                })
+            roster_of[uuid_] = members
+        for m in roster_of[uuid_]:
+            rows.append({**m, "_parent_table_name": MAIN_SHEET, "_parent_index": hh["_index"],
+                         "_submission__uuid": uuid_, "_submission__id": hh["_id"]})
+    members = pd.DataFrame(rows).astype(object)
+    members.insert(3, "_index", range(1, len(members) + 1))
+    members.loc[7, "hh_members/member_age"] = 150                # impossible age
+    members.loc[[15, 40], "hh_members/member_age"] = "dk"        # don't know
+    return members
+
+
 def make_form() -> dict[str, pd.DataFrame]:
     survey = pd.DataFrame([
         ("start", "start", ""),
@@ -118,6 +152,11 @@ def make_form() -> dict[str, pd.DataFrame]:
         ("integer", "hh_head_age", "Age of household head (years)"),
         ("integer", "hh_size", "Number of household members"),
         ("end group", "", ""),
+        ("begin repeat", "hh_members", "Household members"),
+        ("select_one sex", "member_sex", "Sex of household member"),
+        ("integer", "member_age", "Age of household member (years)"),
+        ("select_one yesno", "in_school", "Is the member attending school?"),
+        ("end repeat", "", ""),
         ("begin group", "livestock", "Livestock"),
         ("select_multiple livestock", "livestock_kept", "Which livestock does the household keep?"),
         ("integer", "cattle_owned", "Number of cattle owned"),
@@ -139,7 +178,8 @@ def make_form() -> dict[str, pd.DataFrame]:
         + [("sex", k, v) for k, v in SEX.items()]
         + [("livestock", k, v) for k, v in LIVESTOCK.items()]
         + [("income", k, v) for k, v in INCOME.items()]
-        + [("decider", k, v) for k, v in DECIDER.items()],
+        + [("decider", k, v) for k, v in DECIDER.items()]
+        + [("yesno", "0", "No"), ("yesno", "1", "Yes")],
         columns=["list_name", "name", "label"],
     )
     return {"survey": survey, "choices": choices}
@@ -149,15 +189,23 @@ if __name__ == "__main__":
     import shutil
 
     data = make_survey()
+    members = make_members(data)
+    # CSV export: the main table only (Kobo's CSV export has no repeat groups).
     data.to_csv(HERE / "sample_raw_export.csv", sep=";", index=False)  # Kobo's default separator
+    # Excel export: main sheet + one sheet per repeat group, like Kobo's.
+    with pd.ExcelWriter(HERE / "sample_raw_export.xlsx") as xw:
+        data.to_excel(xw, sheet_name=MAIN_SHEET, index=False)
+        members.to_excel(xw, sheet_name=MEMBER_SHEET, index=False)
     with pd.ExcelWriter(HERE / "sample_form.xlsx") as xw:
         for name, sheet in make_form().items():
             sheet.to_excel(xw, sheet_name=name, index=False)
     # Ship the same files inside the package for `surveyclean --demo` and the app.
     demo = HERE.parent / "surveyclean" / "demo"
     demo.mkdir(exist_ok=True)
-    for f in ["sample_raw_export.csv", "sample_form.xlsx", "rules.yaml"]:
+    for f in ["sample_raw_export.xlsx", "sample_form.xlsx", "rules.yaml"]:
         shutil.copy(HERE / f, demo / f)
-    print(f"Wrote {len(data)} synthetic records to {HERE / 'sample_raw_export.csv'}")
+    (demo / "sample_raw_export.csv").unlink(missing_ok=True)
+    print(f"Wrote {len(data)} synthetic households and {len(members)} members to "
+          f"{HERE / 'sample_raw_export.xlsx'} (and the households alone to sample_raw_export.csv)")
     print(f"Wrote form definition to {HERE / 'sample_form.xlsx'}")
     print(f"Copied demo files to {demo}")
