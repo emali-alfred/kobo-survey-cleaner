@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from surveyclean import SurveyCleanError, clean, run, write_outputs
+from surveyclean import SurveyCleanError, clean, run
 from surveyclean.cli import demo_files, main
 from surveyclean.xlsform import Form, Question
 
@@ -50,7 +50,7 @@ def test_enumerator_summary_counts_flags():
     violations = pd.DataFrame({"record": ["b"], "rule": ["r"], "detail": ["d"]})
     outliers = pd.DataFrame(columns=["record", "column", "value", "expected_range"])
     s = clean.enumerator_summary(df, "enumerator", outliers, violations).set_index("enumerator")
-    assert s.loc["A", "records"] == 2
+    assert s.loc["A", "submissions"] == 2
     assert s.loc["A", "missing_pct"] == 50.0
     assert s.loc["A", "under_10_min"] == 1
     assert s.loc["A", "rule_violations"] == 1 and s.loc["B", "rule_violations"] == 0
@@ -84,28 +84,24 @@ def test_bad_rules_file(tmp_path):
         run(data, rules=rules)
 
 
-def test_outputs_written(tmp_path, ):
-    raw = pd.DataFrame({"q/n": ["1", "2", "3", "4", "5", "500"], "enumerator": list("aabbcc"),
-                        "_uuid": list("uvwxyz")})
-    res = run(raw)
-    paths = write_outputs(res, tmp_path)
-    for key in ["clean_csv", "report", "html", "excel", "enumerators"]:
-        assert paths[key].exists(), key
-    assert "<table>" in paths["html"].read_text(encoding="utf-8")
-    sheets = pd.read_excel(paths["excel"], sheet_name=None)
-    assert {"summary", "clean_data", "enumerators"} <= set(sheets)
-
-
 def test_demo_end_to_end(tmp_path, capsys):
     assert all(p.exists() for p in demo_files().values())
-    assert main(["--demo", "--out", str(tmp_path)]) == 0
+    assert main(["--demo", "--name", "demo", "--out", str(tmp_path)]) == 0
     out = capsys.readouterr().out
     assert "124 in, 120 out (4 duplicates removed)" in out
-    assert "3 possible outliers, 9 rule violations" in out
-    enum = pd.read_csv(tmp_path / "enumerator_summary.csv")
-    assert enum.loc[enum["enumerator"] == "enum_04", "under_10_min"].item() == 3
+    assert "one row per 'hh_members' record (725 rows)" in out
+    assert "3 possible outliers, 10 rule violations" in out
+    assert [p.name for p in tmp_path.iterdir()] == ["demo.xlsx"]  # exactly one file
+    enum = pd.read_excel(tmp_path / "demo.xlsx", sheet_name="Data Quality Report", header=None)
+    assert "Enumerator summary (by 'enumerator')" in enum[0].tolist()
 
 
 def test_cli_error_exit_code(tmp_path, capsys):
-    assert main([str(tmp_path / "missing.csv"), "--out", str(tmp_path)]) == 2
+    assert main([str(tmp_path / "missing.csv"), "--name", "x", "--out", str(tmp_path)]) == 2
     assert "not found" in capsys.readouterr().err
+
+
+def test_cli_requires_a_name(tmp_path, capsys):
+    assert main(["--demo", "--out", str(tmp_path)]) == 2
+    assert "Error: Output file name is required before export." in capsys.readouterr().err
+    assert not any(tmp_path.iterdir())

@@ -12,17 +12,27 @@ from datetime import timedelta, timezone
 
 import pandas as pd
 
-from .xlsform import Form
+from .xlsform import Form, code_key
 
 # Kobo system columns that are rarely needed for analysis.
 DEFAULT_METADATA = [
     "_id", "_validation_status", "_notes", "_status", "_submitted_by",
     "__version__", "_tags", "_index", "_attachments", "_geolocation",
     "formhub/uuid", "meta/instanceID", "meta/rootUuid", "_xform_id_string",
+    "_xform_id", "_version", "_date_modified", "_total_media", "_media_count",
+    "_media_all_received", "instanceID", "meta/deprecatedID",
 ]
 
 # Codes commonly used in surveys for "don't know", "refused", "not applicable".
 DEFAULT_MISSING_CODES = [-99, -98, -88, -77, -999, "dk", "don't know", "refused", "n/a", "na", ""]
+
+
+def short_name(column: str) -> str:
+    """The cleaned name a raw column would get on its own ("grp/Member Age" -> "member_age")."""
+    column = str(column)
+    if column.startswith("_"):
+        return column
+    return re.sub(r"[^0-9a-zA-Z]+", "_", column.split("/")[-1]).strip("_").lower() or "unnamed"
 
 
 def drop_metadata(df: pd.DataFrame, columns: list[str] | None = None) -> tuple[pd.DataFrame, list[str]]:
@@ -191,8 +201,12 @@ def split_select_multiple(df: pd.DataFrame, form: Form) -> tuple[pd.DataFrame, l
 
 
 def add_duration(df: pd.DataFrame, start: str = "start", end: str = "end",
-                 col: str = "duration_min") -> pd.DataFrame:
-    """Add interview length in minutes when the form recorded start and end times."""
+                 col: str = "duration_min", form: Form | None = None) -> pd.DataFrame:
+    """Add interview length in minutes when the form recorded start and end times.
+    With an XLSForm, its `start` / `end` questions are used whatever they are named."""
+    if form is not None:
+        start = next((q.name for q in form.of_type("start") if q.name in df.columns), start)
+        end = next((q.name for q in form.of_type("end") if q.name in df.columns), end)
     if start not in df.columns or end not in df.columns:
         return df
     s, e = df[start], df[end]
@@ -205,6 +219,7 @@ def add_duration(df: pd.DataFrame, start: str = "start", end: str = "end",
 
 ENUMERATOR_CANDIDATES = ["enumerator", "enumerator_name", "enumerator_id", "enum_name",
                          "interviewer", "username", "_submitted_by", "deviceid"]
+# Fallback when none of the above is a question: Kobo's account that submitted.
 
 
 def find_enumerator_column(df: pd.DataFrame, preferred: str | None = None) -> str | None:
@@ -223,48 +238,60 @@ def enumerator_summary(df: pd.DataFrame, enum_col: str, outliers: pd.DataFrame,
     """One row per enumerator: workload, interview speed, missing answers and flags.
     Use it to see who needs retraining or a call-back, not to rank people."""
     questions = [c for c in df.columns if not c.startswith("_") and "__" not in c
-                 and not c.endswith("_label") and c not in {enum_col, "start", "end", "duration_min"}]
+                 and c not in {enum_col, "start", "end", "duration_min"}]
     who = df[enum_col].astype("string").fillna("(blank)")
     rec_to_enum = dict(zip(df[id_col], who)) if id_col in df.columns else dict(zip(df.index, who))
+    if "_uuid" in df.columns:  # submission-level flags use the submission ID
+        rec_to_enum.update(zip(df["_uuid"], who))
 
     def flags_per(table: pd.DataFrame) -> pd.Series:
         if table is None or table.empty:
             return pd.Series(dtype="int64")
         return table["record"].map(rec_to_enum).value_counts()
 
-    g = pd.DataFrame({"enumerator": who})
-    summary = g.groupby("enumerator").size().rename("records").to_frame()
+    # In long data (one row per household member, ...) a submission spans several
+    # rows: count workload and interview length once per submission.
+    per_sub = df
+    if id_col != "_uuid" and "_uuid" in df.columns:
+        per_sub = df.drop_duplicates("_uuid")
+    sub_who = per_sub[enum_col].astype("string").fillna("(blank)")
+
+    summary = sub_who.groupby(sub_who).size().rename("submissions").to_frame()
+    summary.index.name = "enumerator"
+    if len(per_sub) != len(df):
+        summary["rows"] = who.groupby(who).size()
     if questions:
         summary["missing_pct"] = (df[questions].isna().mean(axis=1).mul(100)
                                   .groupby(who).mean().round(1))
-    if "duration_min" in df.columns:
-        dur = df["duration_min"]
-        summary["median_minutes"] = dur.groupby(who).median().round(1)
-        summary[f"under_{short_minutes:g}_min"] = (dur < short_minutes).groupby(who).sum().astype(int)
+    if "duration_min" in per_sub.columns:
+        dur = per_sub["duration_min"]
+        summary["median_minutes"] = dur.groupby(sub_who).median().round(1)
+        summary[f"under_{short_minutes:g}_min"] = (dur < short_minutes).groupby(sub_who).sum().astype(int)
     if duplicates is not None and not duplicates.empty and enum_col in duplicates.columns:
         summary["duplicates"] = (duplicates[enum_col].astype("string").fillna("(blank)")
                                  .value_counts().reindex(summary.index).fillna(0).astype(int))
     summary["outliers"] = flags_per(outliers).reindex(summary.index).fillna(0).astype(int)
     summary["rule_violations"] = flags_per(violations).reindex(summary.index).fillna(0).astype(int)
-    summary["flags_per_10_records"] = ((summary["outliers"] + summary["rule_violations"])
-                                       / summary["records"] * 10).round(1)
-    return summary.sort_values("flags_per_10_records", ascending=False).reset_index()
+    summary["flags_per_10_submissions"] = ((summary["outliers"] + summary["rule_violations"])
+                                           / summary["submissions"] * 10).round(1)
+    summary = summary.sort_values("flags_per_10_submissions", ascending=False)
+    return summary.reset_index()
 
 
-def apply_labels(df: pd.DataFrame, form: Form, suffix: str = "_label") -> tuple[pd.DataFrame, list[str]]:
-    """Add readable label columns for select_one questions ("1" -> "Male")."""
-    out = df.copy()
-    created: list[str] = []
-    for q in form.of_type("select_one"):
-        if q.name not in out.columns:
-            continue
-        labels = form.choice_labels(q.name)
-        if not labels:
-            continue
-        col = f"{q.name}{suffix}"
-        out[col] = out[q.name].astype("string").str.strip().map(labels)
-        created.append(col)
-    return out, created
+def label_codes(s: pd.Series, labels: dict[str, str]) -> pd.Series:
+    """Replace select_one codes with their XLSForm labels ("1" -> "Male").
+    Codes missing from the choices list are kept as they are, so nothing is lost."""
+    keys = s.map(lambda v: code_key(v) if pd.notna(v) else v)
+    return keys.map(lambda k: labels.get(k, k) if pd.notna(k) else pd.NA).astype("string")
+
+
+def label_multi_codes(s: pd.Series, labels: dict[str, str], sep: str = "; ") -> pd.Series:
+    """Replace space-separated select_multiple codes ("1 3") with labels ("Maize; Beans")."""
+    def one(v):
+        if pd.isna(v):
+            return pd.NA
+        return sep.join(labels.get(code_key(c), c) for c in str(v).split())
+    return s.map(one).astype("string")
 
 
 def _fmt(x: float) -> str:
@@ -273,12 +300,21 @@ def _fmt(x: float) -> str:
     return f"{x:.3g}"
 
 
+_ID_LIKE = re.compile(r"(^|_)(id|code)$|^id_", re.IGNORECASE)
+
+
+def outlier_columns(df: pd.DataFrame) -> list[str]:
+    """Numeric answers worth an outlier check: not system columns, 0/1 option
+    columns, or ID / code columns (respondent code 24 is not 'extreme')."""
+    return [c for c in df.select_dtypes("number").columns
+            if not c.startswith("_") and "__" not in c and not _ID_LIKE.search(c)]
+
+
 def flag_outliers(df: pd.DataFrame, columns: list[str] | None = None, k: float = 3.0,
                   id_col: str = "_uuid") -> pd.DataFrame:
     """Flag extreme numeric values using the IQR rule (outside Q1 - k*IQR, Q3 + k*IQR).
     Values are flagged, not removed: a 300-cow herd may be real and needs a human check."""
-    cols = columns or [c for c in df.select_dtypes("number").columns
-                       if not c.startswith("_") and "__" not in c]
+    cols = columns if columns is not None else outlier_columns(df)
     rows = []
     for col in cols:
         s = pd.to_numeric(df[col], errors="coerce")
@@ -300,6 +336,11 @@ def flag_outliers(df: pd.DataFrame, columns: list[str] | None = None, k: float =
     return pd.DataFrame(rows, columns=["record", "column", "value", "expected_range"])
 
 
+def rule_columns(df: pd.DataFrame, expr: str) -> list[str]:
+    """The data columns a rule expression mentions."""
+    return [c for c in df.columns if re.search(rf"(?<![\w.]){re.escape(c)}(?!\w)", expr)]
+
+
 def check_rules(df: pd.DataFrame, rules: list[dict], id_col: str = "_uuid") -> pd.DataFrame:
     """Run consistency checks. Each rule is {"name": ..., "check": <pandas expression
     that must be True>}. Rows where the check is False are returned.
@@ -314,7 +355,7 @@ def check_rules(df: pd.DataFrame, rules: list[dict], id_col: str = "_uuid") -> p
             continue
         ok = pd.Series(ok, index=df.index).astype("boolean")
         # Only judge records where every column the rule uses is answered.
-        used = [c for c in df.columns if re.search(rf"(?<![\w.]){re.escape(c)}(?!\w)", expr)]
+        used = rule_columns(df, expr)
         answered = df[used].notna().all(axis=1) if used else pd.Series(True, index=df.index)
         failed = ok.eq(False).fillna(False).astype(bool) & answered
         for idx in df.index[failed]:

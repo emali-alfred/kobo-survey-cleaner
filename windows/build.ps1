@@ -46,6 +46,8 @@ try {
         --name "Survey Cleaner" `
         --icon "$work\src\surveyclean\assets\icon.ico" `
         --collect-data surveyclean `
+        --collect-all pyreadstat --collect-all pyreadr `
+        --hidden-import surveyclean.export `
         --distpath "$work\dist" --workpath "$work\build" --specpath "$work\build" `
         "windows\launcher.py"
     if ($LASTEXITCODE) { throw "PyInstaller failed" }
