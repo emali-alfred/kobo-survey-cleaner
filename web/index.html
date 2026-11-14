@@ -4,20 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Survey Cleaner</title>
-<meta name="description" content="Clean KoboToolbox and ODK survey exports and get a data quality report. Runs on your device: your data is never uploaded.">
+<meta name="description" content="Clean KoboToolbox and ODK survey exports, reshape repeat groups and save one file in Excel, CSV, Stata, R, SPSS or HTML. Runs on your device: your data is never uploaded.">
 <meta name="theme-color" content="#0f7a68">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("sc-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}catch(e){}</script>
 </head>
 <body>
 <header class="top">
   <div class="wrap brand">
     <img src="icons/icon-192.png" alt="" width="44" height="44">
-    <div>
+    <div class="brand-text">
       <h1>Survey Cleaner</h1>
-      <p>Clean KoboToolbox &amp; ODK exports and get a data quality report</p>
+      <p>Clean KoboToolbox &amp; ODK exports and save one analysis-ready file</p>
+    </div>
+    <div class="theme-switch" role="group" aria-label="Colour theme">
+      <button type="button" data-theme-choice="light" aria-pressed="false" title="Light">☀<span> Light</span></button>
+      <button type="button" data-theme-choice="dark" aria-pressed="false" title="Dark">☾<span> Dark</span></button>
+      <button type="button" data-theme-choice="system" aria-pressed="true" title="Follow the device">◐<span> System</span></button>
     </div>
   </div>
 </header>
@@ -28,21 +34,29 @@
     Runs entirely on your device. Your survey data is never uploaded.
   </p>
 
-  <section class="card" aria-labelledby="files-h">
+  <ol class="stepper" aria-label="Steps">
+    <li data-step="1" class="on">Upload</li>
+    <li data-step="2">Reshape</li>
+    <li data-step="3">Preview &amp; Rename</li>
+    <li data-step="4">Name &amp; Export</li>
+  </ol>
+
+  <!-- 1 Upload -->
+  <section class="card" id="step1" aria-labelledby="s1h">
     <div class="card-head">
-      <h2 id="files-h">1. Choose your files</h2>
+      <h2 id="s1h">1. Upload data &amp; XLSForm</h2>
       <button type="button" class="link" id="demo">Try the demo survey</button>
     </div>
     <div class="drops">
       <label class="drop" data-slot="data">
-        <input type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+        <input type="file" multiple accept=".csv,.xlsx,.xls,.zip,text/csv,application/zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
         <span class="drop-title">Data export <em>required</em></span>
-        <span class="drop-file">CSV or Excel from Kobo / ODK</span>
+        <span class="drop-file">Kobo Excel (keeps repeat groups), CSV, or ODK Central .zip</span>
       </label>
       <label class="drop" data-slot="form">
         <input type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
         <span class="drop-title">XLSForm <em>optional</em></span>
-        <span class="drop-file">Adds types, labels, multi-select columns</span>
+        <span class="drop-file">Turns codes into labels (0 → No, 1 → Yes)</span>
       </label>
       <label class="drop" data-slot="rules">
         <input type="file">
@@ -50,40 +64,98 @@
         <span class="drop-file">YAML file of logic checks</span>
       </label>
     </div>
+    <div class="actions">
+      <button type="button" class="primary" id="next1" disabled>Next: Reshape</button>
+    </div>
+    <details class="findings" id="f1" hidden><summary><span class="ftitle">Checks &amp; suggestions</span><span class="chips"></span><span class="more">Show details</span></summary><div class="flist"></div></details>
+  </section>
 
+  <!-- 2 Reshape -->
+  <section class="card" id="step2" hidden aria-labelledby="s2h">
+    <h2 id="s2h">2. Reshape repeat groups</h2>
+    <div class="tw"><table class="grid-table" id="tables"></table></div>
+    <label class="field">One row per
+      <select id="level"></select>
+    </label>
+    <p class="hint" id="level-help"></p>
+<details class="findings" id="f2" hidden><summary><span class="ftitle">Checks &amp; suggestions</span><span class="chips"></span><span class="more">Show details</span></summary><div class="flist"></div></details>
     <details class="opts">
-      <summary>Options</summary>
+      <summary>Cleaning options</summary>
       <div class="grid">
-        <label>Report title<input id="title" type="text" value="Data quality report"></label>
         <label>Enumerator column<input id="enum" type="text" placeholder="auto-detect"></label>
         <label>Outlier strictness (IQR ×)<input id="k" type="number" min="1" max="10" step="0.5" value="3"></label>
       </div>
     </details>
-  </section>
-
-  <section class="card" aria-labelledby="run-h">
-    <h2 id="run-h">2. Clean</h2>
-    <button type="button" id="run" class="primary" disabled>Clean data</button>
-    <div class="status" id="status" role="status" aria-live="polite">
-      <div class="bar"><span id="bar"></span></div>
-      <span id="status-text">Preparing the cleaning engine…</span>
+    <div class="actions">
+      <button type="button" class="secondary" data-back="1">Back</button>
+      <button type="button" class="primary" id="next2">Next: Clean &amp; preview</button>
     </div>
-    <p class="hint" id="first-time">The first start downloads about 30&nbsp;MB once; after that it works offline.</p>
   </section>
 
-  <section class="card" id="results" hidden aria-labelledby="res-h">
-    <h2 id="res-h">3. Results</h2>
-    <div id="warnings"></div>
+  <!-- 3 Preview & Rename -->
+  <section class="card" id="step3" hidden aria-labelledby="s3h">
+    <h2 id="s3h">3. Preview &amp; rename</h2>
     <div class="stats" id="stats"></div>
-    <h3>Downloads</h3>
-    <div class="downloads" id="downloads"></div>
-    <h3>Report</h3>
-    <iframe id="report" title="Data quality report" sandbox="allow-same-origin"></iframe>
+    <div id="warnings"></div>
+<details class="findings" id="f3" hidden><summary><span class="ftitle">Checks &amp; suggestions</span><span class="chips"></span><span class="more">Show details</span></summary><div class="flist"></div></details>
+    <label class="check"><input type="checkbox" id="labels" checked> Replace answer codes with labels from the XLSForm</label>
+    <h3>Preview <span class="muted" id="preview-note"></span></h3>
+    <div class="tw preview"><table class="grid-table" id="preview"></table></div>
+    <fieldset class="keep-mode">
+      <legend>Variables to export</legend>
+      <label><input type="radio" name="keepmode" value="all" checked> All variables</label>
+      <label><input type="radio" name="keepmode" value="selected"> Selected variables only</label>
+      <span class="muted" id="keep-count"></span>
+    </fieldset>
+    <details class="rename" id="rename-box">
+      <summary>Select &amp; Rename Variables / Headers <span class="muted">(optional)</span></summary>
+      <p class="hint">Tick the variables to keep (this switches to "Selected variables only"). Type a new name to rename a variable; leave it as it is to keep the original name.</p>
+      <div class="var-tools">
+        <input type="search" id="var-search" placeholder="Search variables or questions" aria-label="Search variables">
+        <button type="button" class="secondary small" id="select-all">Select all</button>
+        <button type="button" class="secondary small" id="select-none">Select none</button>
+      </div>
+      <div class="tw rename-table"><table class="grid-table" id="rename"></table></div>
+      <p class="error" id="rename-error" role="alert"></p>
+      <button type="button" class="secondary" id="reset-names">Reset all names</button>
+    </details>
+    <div class="actions">
+      <button type="button" class="secondary" data-back="2">Back</button>
+      <button type="button" class="primary" id="next3">Next: Name &amp; export</button>
+    </div>
   </section>
+
+  <!-- 4 Name & Export -->
+  <section class="card" id="step4" hidden aria-labelledby="s4h">
+    <h2 id="s4h">4. Name &amp; export</h2>
+    <label class="field">Enter Output File Name <span class="req">*</span>
+      <input id="name" type="text" autocomplete="off" required aria-describedby="name-error">
+    </label>
+    <p class="error" id="name-error" role="alert">Error: Output file name is required before export.</p>
+    <fieldset class="formats">
+      <legend>Format</legend>
+      <div id="formats"></div>
+    </fieldset>
+    <p class="hint" id="format-help"></p>
+    <p class="hint" id="target"></p>
+    <details class="findings" id="f4" hidden><summary><span class="ftitle">Checks &amp; suggestions</span><span class="chips"></span><span class="more">Show details</span></summary><div class="flist"></div></details>
+    <div class="actions">
+      <button type="button" class="secondary" data-back="3">Back</button>
+      <button type="button" class="primary" id="export" disabled>Export 1 file</button>
+    </div>
+    <div id="done" hidden class="done"></div>
+  </section>
+
+  <div class="status" id="status" role="status" aria-live="polite">
+    <div class="bar"><span id="bar"></span></div>
+    <span id="status-text">Preparing the cleaning engine…</span>
+  </div>
+  <p class="hint" id="first-time">The first start downloads about 30&nbsp;MB once; after that it works offline.</p>
 </main>
 
 <footer class="wrap foot">
   <a href="https://github.com/emali-alfred/kobo-survey-cleaner">Source code</a> ·
+  <a href="https://github.com/emali-alfred/kobo-survey-cleaner/releases/latest">Windows app</a> ·
   <a href="privacy.html">Privacy</a> ·
   <span id="version"></span>
 </footer>

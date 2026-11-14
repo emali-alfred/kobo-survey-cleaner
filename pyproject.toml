@@ -4,14 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "surveyclean"
-version = "0.2.0"
+version = "0.3.0"
 description = "Clean KoboToolbox / ODK survey exports and produce a data quality report."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Alfred Kombo Emali" }]
 requires-python = ">=3.10"
-dependencies = ["pandas>=2.0", "openpyxl>=3.1", "pyyaml>=6.0"]
+dependencies = [
+    "pandas>=2.0", "openpyxl>=3.1", "pyyaml>=6.0",
+    "pyreadstat>=1.2",  # SPSS .sav
+    "pyreadr>=0.5",     # R .rds / .RData
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "pillow>=10"]  # pillow only redraws the logo (assets/make_logo.py)
@@ -26,7 +30,7 @@ surveyclean-gui = "surveyclean.gui:main"
 packages = ["surveyclean", "surveyclean.demo", "surveyclean.assets"]
 
 [tool.setuptools.package-data]
-"surveyclean.demo" = ["*.csv", "*.xlsx", "*.yaml"]
+"surveyclean.demo" = ["*.xlsx", "*.yaml"]
 "surveyclean.assets" = ["*.png", "*.ico"]
 
 [tool.pytest.ini_options]

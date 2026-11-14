@@ -72,11 +72,14 @@ def test_select_multiple_split(raw, form):
     assert pd.isna(out.loc[2, "crops__beans"])  # unanswered stays missing, not 0
 
 
-def test_labels_added(raw, form):
+def test_codes_replaced_by_labels(raw, form):
     df, _ = clean.clean_column_names(raw)
-    out, cols = clean.apply_labels(df, form)
-    assert cols == ["sex_label"]
-    assert out["sex_label"].tolist()[:2] == ["Male", "Female"]
+    labels = form.choice_labels("sex")
+    assert clean.label_codes(df["sex"], labels).tolist()[:2] == ["Male", "Female"]
+    assert clean.label_codes(pd.Series(["1.0", None, "9"]), labels).tolist()[0] == "Male"  # 1.0 == 1
+    assert clean.label_codes(pd.Series(["9"]), labels).tolist() == ["9"]  # unknown code kept
+    multi = clean.label_multi_codes(df["crops"], form.choice_labels("crops"))
+    assert multi.tolist()[0] == "Maize; Beans"
 
 
 def test_outliers_flagged_not_removed():

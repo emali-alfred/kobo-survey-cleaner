@@ -19,6 +19,10 @@ rules:
     check: "not (milk_litres_day > 0 and cattle_owned == 0)"
     message: "Milk reported but no cattle owned"
 
+  - name: member_age_plausible
+    check: "member_age >= 0 and member_age <= 110"
+    message: "Household member age should be between 0 and 110"
+
   - name: interview_length
     check: "(end - start).dt.total_seconds() >= 600"
     message: "Interview shorter than 10 minutes"
