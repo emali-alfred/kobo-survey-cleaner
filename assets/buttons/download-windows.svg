@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="64" viewBox="0 0 300 64" role="img" aria-label="Download for Windows">
+  <title>Download for Windows</title>
+  <rect width="300" height="64" rx="12" fill="#0f7a68"/>
+  <rect x="1" y="1" width="298" height="62" rx="11" fill="none" stroke="#ffffff" stroke-opacity=".18"/>
+  <!-- download arrow -->
+  <g fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M32 16v20"/>
+    <path d="M23 28l9 9 9-9"/>
+    <path d="M20 44h24"/>
+  </g>
+  <text x="62" y="30" fill="#ffffff" font-family="Segoe UI, -apple-system, Helvetica, Arial, sans-serif" font-size="19" font-weight="700">Download for Windows</text>
+  <text x="62" y="49" fill="#d7f2ea" font-family="Segoe UI, -apple-system, Helvetica, Arial, sans-serif" font-size="13">Free · Windows 10 / 11 · 28 MB</text>
+</svg>

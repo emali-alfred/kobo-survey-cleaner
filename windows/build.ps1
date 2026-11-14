@@ -23,6 +23,24 @@ if (-not $Iscc) {
     if (-not $Iscc) { throw "Inno Setup 6 not found. Install it with: winget install JRSoftware.InnoSetup" }
 }
 
+# Optional code signing: with a code-signing certificate in your Windows
+# certificate store (or on its USB token), set SURVEYCLEAN_SIGN_THUMBPRINT to its
+# thumbprint. Signing removes "Unknown publisher" and lets SmartScreen build
+# trust in the app over time.
+function Invoke-Sign([string]$File) {
+    $thumb = $env:SURVEYCLEAN_SIGN_THUMBPRINT
+    if (-not $thumb) { return }
+    $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+        Sort-Object FullName -Descending | Select-Object -First 1
+    if (-not $signtool) { throw "signtool.exe not found: install the Windows SDK (signing tools)." }
+    $timestamp = if ($env:SURVEYCLEAN_TIMESTAMP_URL) { $env:SURVEYCLEAN_TIMESTAMP_URL } else { "http://timestamp.digicert.com" }
+    & $signtool.FullName sign /sha1 $thumb /fd sha256 /tr $timestamp /td sha256 /d "Survey Cleaner" $File
+    if ($LASTEXITCODE) { throw "Signing failed for $File" }
+    & $signtool.FullName verify /pa $File | Out-Null
+    if ($LASTEXITCODE) { throw "Signature check failed for $File" }
+    Write-Host "Signed: $File"
+}
+
 $version = (Select-String -Path "$repo\surveyclean\__init__.py" -Pattern '__version__ = "([^"]+)"').Matches[0].Groups[1].Value
 Write-Host "Building Survey Cleaner $version"
 
@@ -58,14 +76,23 @@ try {
     Get-Content $report | Write-Host
     if (-not (Select-String -Path $report -Pattern "SELFTEST EXIT 0" -Quiet)) { throw "Self-test of the bundled program failed" }
 
+    Invoke-Sign "$work\dist\Survey Cleaner\Survey Cleaner.exe"
     & $Iscc /Q "/DAppVersion=$version" "/DSourceDir=$work\dist\Survey Cleaner" "/DOutputDir=$work\out" "windows\installer.iss"
     if ($LASTEXITCODE) { throw "Inno Setup failed" }
+    Invoke-Sign "$work\out\SurveyCleaner-Setup-$version.exe"
 } finally {
     Pop-Location
 }
 
 New-Item -ItemType Directory -Force "$repo\dist" | Out-Null
-Copy-Item "$work\out\*.exe" "$repo\dist" -Force
-Get-ChildItem "$repo\dist\SurveyCleaner-Setup-$version.exe" | ForEach-Object {
+Copy-Item "$work\out\SurveyCleaner-Setup-$version.exe" "$repo\dist" -Force
+# Same file under a fixed name: attach both to the release, and the README's
+# "Download for Windows" button (releases/latest/download/SurveyCleaner-Setup.exe)
+# always serves the newest version.
+Copy-Item "$work\out\SurveyCleaner-Setup-$version.exe" "$repo\dist\SurveyCleaner-Setup.exe" -Force
+Get-ChildItem "$repo\dist\SurveyCleaner-Setup-$version.exe", "$repo\dist\SurveyCleaner-Setup.exe" | ForEach-Object {
     Write-Host ("Installer: {0} ({1:N1} MB)" -f $_.FullName, ($_.Length / 1MB))
+}
+if (-not $env:SURVEYCLEAN_SIGN_THUMBPRINT) {
+    Write-Host "Not code-signed (set SURVEYCLEAN_SIGN_THUMBPRINT to sign); Windows will show a SmartScreen warning."
 }
